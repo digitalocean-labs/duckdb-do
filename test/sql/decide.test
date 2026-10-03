@@ -1,0 +1,69 @@
+# name: test/sql/decide.test
+# description: do_decide argument checks and NULL handling (no network calls)
+# group: [docn]
+
+require docn
+
+statement error
+SELECT do_decide('x', 'Is it?')
+----
+no model access key
+
+statement ok
+SET do_model_access_key = 'fake-key-for-offline-tests'
+
+# NULL rows return NULL without calling the API
+query I
+SELECT do_decide(NULL::VARCHAR, 'Is it?')
+----
+NULL
+
+query I
+SELECT typeof(do_decide(NULL::VARCHAR, 'Is it?'))
+----
+JSON
+
+statement error
+SELECT do_decide('x', q) FROM (VALUES ('Is it?')) t(q)
+----
+argument 2 must be a constant, not a column
+
+statement error
+SELECT do_decide('x', 'Team?', 'pick', ['a', 'b'])
+----
+argument 3 must be 'choice' or 'score'
+
+statement error
+SELECT do_decide('x', 'Team?', 'choice', ['a'])
+----
+needs 2 to 255 labels, got 1
+
+statement error
+SELECT do_decide('x', 'Severity?', 'score', ['1','2','3','4','5','6','7','8','9','10','11'])
+----
+needs 2 to 10 levels, got 11
+
+statement error
+SELECT do_decide('x', 'Team?', 'choice', 'billing')
+----
+criteria must be a list
+
+statement error
+SELECT do_decide('x', 'Team?', 'choice', [{name: 'a'}, {name: 'b'}])
+----
+each criteria struct needs a 'label'
+
+statement error
+SELECT do_decide('x', {q1: {instructions: 'Is it?'}})
+----
+question 'q1' must be a struct like
+
+statement error
+SELECT do_decide('x', {q1: {type: 'noul', instructions: 'Is it?', criteria: ['a', 'b']}})
+----
+yes/no (noul) questions take no criteria
+
+statement error
+SELECT do_decide('x', 42)
+----
+argument 2 must be a question string or a struct of questions

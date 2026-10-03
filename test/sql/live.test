@@ -1,0 +1,62 @@
+# name: test/sql/live.test
+# description: Functions against the live DigitalOcean API. Skipped unless
+#              DO_MODEL_ACCESS_KEY is set in the environment.
+# group: [docn]
+
+require docn
+
+require-env DO_MODEL_ACCESS_KEY
+
+statement ok
+SET do_model_access_key = '${DO_MODEL_ACCESS_KEY}'
+
+# do_models
+
+query II
+SELECT name, type FROM do_models() WHERE name = 'typesafe-jev-1.13.0'
+----
+typesafe-jev-1.13.0	decision
+
+# do_decide
+
+statement ok
+CREATE TABLE tickets AS SELECT * FROM (VALUES
+    (1, 'I was charged twice this month. Refund me or I am leaving.'),
+    (2, 'My droplet will not boot after I resized it.'),
+    (3, 'DNS for my domain stopped resolving, production is down!'),
+    (4, NULL)) t(id, ticket)
+
+query II
+SELECT id, (do_decide(ticket, 'Is the customer threatening to leave?')::VARIANT).noul::DOUBLE > 0.5
+FROM tickets ORDER BY id
+----
+1	true
+2	false
+3	false
+4	NULL
+
+query II
+SELECT id, (do_decide(ticket, 'Which team should handle this?', 'choice',
+    [{label: 'billing', description: 'Charges, invoices, refunds'},
+     {label: 'droplets', description: 'VM creation, resize, boot'},
+     {label: 'networking', description: 'DNS, load balancers, firewalls'}])::VARIANT).choice::VARCHAR
+FROM tickets ORDER BY id
+----
+1	billing
+2	droplets
+3	networking
+4	NULL
+
+query II
+SELECT id, (do_decide(ticket, 'How severe is this?', 'score', ['low', 'medium', 'high'])::VARIANT).label::VARCHAR
+FROM tickets WHERE id = 3
+----
+3	high
+
+query III
+SELECT id, a.team.choice::VARCHAR, a.urgent.type::VARCHAR
+FROM (SELECT id, do_decide(ticket, {
+    team: {type: 'choice', instructions: 'Which team?', criteria: ['billing', 'droplets', 'networking']},
+    urgent: {type: 'noul', instructions: 'Is this urgent?'}})::VARIANT AS a FROM tickets WHERE id = 2)
+----
+2	droplets	noul

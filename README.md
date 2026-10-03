@@ -1,101 +1,177 @@
-# DuckDB C/C++ extension template
-This is an **experimental** template for C/C++ based extensions that link with the **C Extension API** of DuckDB. Note that this
-is different from https://github.com/duckdb/extension-template, which links against the C++ API of DuckDB.
+# DigitalOcean extension for DuckDB
 
-Features:
-- No DuckDB build required
-- CI/CD chain preconfigured
-- (Coming soon) Works with community extensions
+[![Status: experimental](https://img.shields.io/badge/status-experimental-orange)](#)
+[![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
+[![DuckDB >= 1.5.6](https://img.shields.io/badge/DuckDB-%E2%89%A5%201.5.6-yellow)](https://duckdb.org)
+[![DuckDB C Extension API: stable](https://img.shields.io/badge/DuckDB%20C%20API-stable-brightgreen)](https://duckdb.org/docs/stable/clients/c/overview)
+<!-- Enable once the repository is public (badges of private repos return 404):
+[![CI](https://github.com/digitalocean/duckdb-do/actions/workflows/MainDistributionPipeline.yml/badge.svg)](https://github.com/digitalocean/duckdb-do/actions/workflows/MainDistributionPipeline.yml)
+-->
 
-## Cloning
-Clone the repo with submodules
+> [!NOTE]
+> This extension is experimental. Functions, settings and output formats may change between releases.
 
-```shell
-git clone --recurse-submodules <repo>
+It brings the [DigitalOcean AI-Native Cloud](https://www.digitalocean.com/) to DuckDB.
+It exposes DigitalOcean services as SQL functions, so you can use them on the rows of any
+table without leaving your query.
+
+| Service | Function | Status |
+|---|---|---|
+| [Serverless Inference](https://docs.digitalocean.com/products/inference/) | `do_models` | Available |
+| [Serverless Inference](https://docs.digitalocean.com/products/inference/) | `do_decide` | Available |
+| [Serverless Inference](https://docs.digitalocean.com/products/inference/) | `do_prompt` | Coming soon |
+| [Serverless Inference](https://docs.digitalocean.com/products/inference/) | `do_embed` | Coming soon |
+
+More DigitalOcean services will be added over time.
+
+The extension is built on the stable DuckDB C Extension API and requires DuckDB 1.5.6 or later.
+
+## Quick start
+
+```sql
+LOAD docn;
+SET do_model_access_key = '<your model access key>';
+
+-- List the available models
+FROM do_models();
 ```
 
-## Dependencies
-In principle, compiling this template only requires a C/C++ toolchain. However, this template relies on some additional
-tooling to make life a little easier and to be able to share CI/CD infrastructure with extension templates for other languages:
+A model access key can be created in the DigitalOcean control panel under Serverless Inference.
 
-- Python3
-- Python3-venv
-- [Make](https://www.gnu.org/software/make)
-- CMake
-- Git
-- (Optional) Ninja + ccache
+## Functions
 
-Installing these dependencies will vary per platform:
-- For Linux, these come generally pre-installed or are available through the distro-specific package manager.
-- For MacOS, [homebrew](https://formulae.brew.sh/).
-- For Windows, [chocolatey](https://community.chocolatey.org/).
+### Serverless Inference
+
+#### `do_models`
+
+Lists the models available on Serverless Inference.
+
+```sql
+SELECT name, type, context_length FROM do_models() WHERE name LIKE 'qwen%';
+```
+
+| Column | Type | Description |
+|---|---|---|
+| `name` | `VARCHAR` | Model name to use in requests and settings, e.g. `SET do_decide_model = '<name>'` |
+| `type` | `VARCHAR` | Model type, e.g. `chat`, `embedding` or `decision` |
+| `description` | `VARCHAR` | Short description of the model |
+| `creator` | `VARCHAR` | Organization that created the model |
+| `context_length` | `BIGINT` | Maximum input tokens, `NULL` if not reported |
+| `max_output_tokens` | `BIGINT` | Maximum output tokens, `NULL` if not reported |
+
+#### `do_decide`
+
+Answers closed questions about text using a decision model. It returns typed answers
+with calibrated probabilities, never free text, and is suited to classification,
+routing, scoring and filtering over many rows.
+
+| Form | Answers |
+|---|---|
+| `do_decide(text, question)` | Yes/no, as a probability |
+| `do_decide(text, question, 'choice', labels)` | One label from a fixed list |
+| `do_decide(text, question, 'score', levels)` | A position on an ordered scale |
+| `do_decide(text, questions)` | Several questions in one request |
+
+The result is `JSON`. Cast it to `VARIANT` to access fields.
+
+**Yes/no**
+
+```sql
+SELECT do_decide('I was charged twice and nobody replied.', 'Is this urgent?');
+-- {"type":"noul","noul":0.78}
+```
+
+**Choice.** Labels are plain strings, or structs with a description to guide the model:
+
+```sql
+SELECT (do_decide(ticket, 'Which team should handle this?', 'choice', [
+           {label: 'billing',    description: 'Charges, invoices, refunds'},
+           {label: 'droplets',   description: 'VM creation, resize, boot, SSH'},
+           {label: 'networking', description: 'DNS, load balancers, firewalls'}
+       ])::VARIANT).choice AS team
+FROM support_tickets;
+```
+
+**Score.** Levels are ordered from low to high. The answer includes a `label` with the most
+likely level:
+
+```sql
+SELECT do_decide(ticket, 'How severe is this?', 'score', ['low', 'medium', 'high'])
+FROM support_tickets;
+-- {"type":"score","score":2,"legend":{"0":"low","1":"medium","2":"high"},
+--  "probabilities":{"0":0,"1":0,"2":1},"confidence":0.99,"label":"high"}
+```
+
+**Several questions.** Pass a struct of questions. The result maps each question id to its answer:
+
+```sql
+SELECT id, a.team.choice::VARCHAR AS team, a.severity.label::VARCHAR AS severity
+FROM (
+    SELECT id, do_decide(ticket, {
+        team:     {type: 'choice', instructions: 'Which team?', criteria: ['billing', 'droplets', 'networking']},
+        severity: {type: 'score',  instructions: 'How severe?', criteria: ['low', 'medium', 'high']}
+    })::VARIANT AS a
+    FROM support_tickets
+);
+```
+
+**Notes**
+
+- The question, type and labels must be constants. Only the text argument can vary per row.
+- Choice questions take 2 to 255 labels. Score questions take 2 to 10 levels.
+- `NULL` text returns `NULL` without calling the API.
+- Rows that still fail after retries return `{"error":{"status":...,"message":...}}`.
+  An invalid key or model fails the whole query.
+
+## Settings
+
+| Setting | Default | Description |
+|---|---|---|
+| `do_model_access_key` | `''` | DigitalOcean model access key |
+| `do_decide_model` | `typesafe-jev-1.13.0` | Model used by `do_decide` |
+| `do_max_concurrent_requests` | `32` | Maximum requests in flight at once, across all threads |
+
+Requests are retried on rate limiting (HTTP 429), server errors and network failures,
+up to two times. Lower `do_max_concurrent_requests` if your key reaches its rate limit.
+
+Settings are visible through `duckdb_settings()`. Avoid sharing database sessions that
+hold a key.
 
 ## Building
-After installing the dependencies, building is a two-step process. Firstly run:
-```shell
-make configure
-```
-This will ensure a Python venv is set up with DuckDB and DuckDB's test runner installed. Additionally, depending on configuration,
-DuckDB will be used to determine the correct platform for which you are compiling.
 
-Then, to build the extension run:
+Requirements: a C++17 compiler, CMake, Python 3, Git and [vcpkg](https://vcpkg.io).
+
 ```shell
+git clone --recurse-submodules https://github.com/digitalocean/duckdb-do.git
+cd duckdb-do
+export VCPKG_ROOT=/path/to/vcpkg
+make configure
 make debug
 ```
-This delegates the build process to cargo, which will produce a shared library in `target/debug/<shared_lib_name>`. After this step, 
-a script is run to transform the shared library into a loadable extension by appending a binary footer. The resulting extension is written
-to the `build/debug` directory.
 
-To create optimized release binaries, simply run `make release` instead.
+The extension is written to `build/debug/docn.duckdb_extension`. Use `make release` for an
+optimized build.
 
-### Faster builds
-We recommend to install Ninja and Ccache for building as this can have a significant speed boost during development. After installing, ninja can be used 
-by running:
+Load a local build in a DuckDB 1.5.6+ client started with unsigned extensions allowed:
+
 ```shell
-make clean
-GEN=ninja make debug
+duckdb -unsigned
+```
+
+```sql
+LOAD './build/debug/docn.duckdb_extension';
 ```
 
 ## Testing
-This extension uses the DuckDB Python client for testing. This should be automatically installed in the `make configure` step.
-The tests themselves are written in the SQLLogicTest format, just like most of DuckDB's tests. A sample test can be found in
-`test/sql/<extension_name>.test`. To run the tests using the *debug* build:
+
+Tests are written in the SQLLogicTest format and live in `test/sql`.
 
 ```shell
 make test_debug
 ```
 
-or for the *release* build:
+Tests that call the live API run only when a key is set:
+
 ```shell
-make test_release
+DO_MODEL_ACCESS_KEY=<your key> make test_debug
 ```
-
-### Version switching
-Testing with different DuckDB versions is really simple:
-
-First, run 
-```
-make clean_all
-```
-to ensure the previous `make configure` step is deleted.
-
-Then, run 
-```
-DUCKDB_TEST_VERSION=v1.1.2 make configure
-```
-to select a different duckdb version to test with
-
-Finally, build and test with 
-```
-make debug
-make test_debug
-```
-
-### Using unstable Extension C API functionality
-The DuckDB Extension C API has a stable part and an unstable part. By default, this template only allows usage of the stable
-part of the API. To switch it to allow using the unstable part, take the following steps:
-
-Firstly, set your `TARGET_DUCKDB_VERSION` to your desired in `./Makefile`. Then, run `make update_duckdb_headers` to ensure 
-the headers in `./duckdb_capi` are set to the correct version. (FIXME: this is not yet working properly). 
-
-Finally, set `USE_UNSTABLE_C_API` to 1 in `./Makefile`. That's all!
