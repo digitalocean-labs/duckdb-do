@@ -40,13 +40,6 @@ duckdb -unsigned
 INSTALL '/path/to/duckdb-do/build/release/docn.duckdb_extension';
 ```
 
-After installing, `LOAD docn` works in any session started with `-unsigned`. In other clients,
-set the `allow_unsigned_extensions` option when connecting, for example in Python:
-
-```python
-con = duckdb.connect(config={'allow_unsigned_extensions': 'true'})
-```
-
 ## Quick start
 
 ```sql
