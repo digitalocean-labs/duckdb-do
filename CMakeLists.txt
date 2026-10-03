@@ -23,6 +23,13 @@ if (DEFINED DUCKDB_EXTENSION_API_VERSION_UNSTABLE)
     add_definitions(-DDUCKDB_EXTENSION_API_VERSION_UNSTABLE=${DUCKDB_EXTENSION_API_VERSION_UNSTABLE})
 endif()
 
+# CI cross-compiles macOS builds (e.g. x86_64 on an arm64 runner) and passes the
+# target as OSX_BUILD_ARCH. Must be set before project() to take effect (APPLE is
+# not defined yet at this point, so only the variable is checked).
+if (NOT "$ENV{OSX_BUILD_ARCH}" STREQUAL "")
+    set(CMAKE_OSX_ARCHITECTURES "$ENV{OSX_BUILD_ARCH}")
+endif()
+
 ###
 # Build
 ###
