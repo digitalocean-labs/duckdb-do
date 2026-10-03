@@ -26,6 +26,27 @@ More DigitalOcean services will be added over time.
 
 The extension is built on the stable DuckDB C Extension API and requires DuckDB 1.5.6 or later.
 
+## Installation
+
+`docn` is not yet published to an extension repository. Build it from source (see
+[Building](#building)), then install the file once. The build is not signed by DuckDB, so
+start DuckDB with unsigned extensions allowed:
+
+```shell
+duckdb -unsigned
+```
+
+```sql
+INSTALL '/path/to/duckdb-do/build/release/docn.duckdb_extension';
+```
+
+After installing, `LOAD docn` works in any session started with `-unsigned`. In other clients,
+set the `allow_unsigned_extensions` option when connecting, for example in Python:
+
+```python
+con = duckdb.connect(config={'allow_unsigned_extensions': 'true'})
+```
+
 ## Quick start
 
 ```sql
@@ -146,21 +167,11 @@ git clone --recurse-submodules https://github.com/digitalocean/duckdb-do.git
 cd duckdb-do
 export VCPKG_ROOT=/path/to/vcpkg
 make configure
-make debug
+make release
 ```
 
-The extension is written to `build/debug/docn.duckdb_extension`. Use `make release` for an
-optimized build.
-
-Load a local build in a DuckDB 1.5.6+ client started with unsigned extensions allowed:
-
-```shell
-duckdb -unsigned
-```
-
-```sql
-LOAD './build/debug/docn.duckdb_extension';
-```
+The extension is written to `build/release/docn.duckdb_extension`. Use `make debug` for a
+debug build in `build/debug`.
 
 ## Testing
 
