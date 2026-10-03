@@ -1,0 +1,26 @@
+# name: test/sql/settings.test
+# description: SET options registered by the docn extension
+# group: [docn]
+
+require docn
+
+query III
+SELECT current_setting('do_model_access_key'), current_setting('do_decide_model'), current_setting('do_max_concurrent_requests')
+----
+(empty)	typesafe-jev-1.13.0	32
+
+statement ok
+SET do_model_access_key = 'test-key'
+
+statement ok
+SET do_max_concurrent_requests = 8
+
+query II
+SELECT current_setting('do_model_access_key'), current_setting('do_max_concurrent_requests')
+----
+test-key	8
+
+statement error
+SET do_max_concurrent_requests = 'lots'
+----
+Could not convert string 'lots' to INT64
