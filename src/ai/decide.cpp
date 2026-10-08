@@ -127,9 +127,9 @@ std::string Bind(duckdb_bind_info info, DecideBindData &data) {
 	duckdb_scalar_function_get_client_context(info, &raw_context);
 	ClientContextHandle context(raw_context);
 
-	data.access_key = GetStringSetting(context.get(), kModelAccessKeySetting);
+	data.access_key = GetModelAccessKey(context.get());
 	if (data.access_key.empty()) {
-		return "no model access key. Run: SET do_model_access_key = '<your key>'";
+		return "no model access key. Set the DO_MODEL_ACCESS_KEY environment variable";
 	}
 	std::string model = GetStringSetting(context.get(), kDecideModelSetting);
 	data.max_concurrent = GetIntSetting(context.get(), kMaxConcurrentRequestsSetting, 32);
