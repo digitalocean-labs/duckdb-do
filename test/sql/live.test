@@ -58,3 +58,36 @@ FROM (SELECT id, do_decide(ticket, {
     urgent: {type: 'noul', instructions: 'Is this urgent?'}})::VARIANT AS a FROM tickets WHERE id = 2)
 ----
 2	droplets	noul
+
+# do_prompt: returns text from the default model and from an explicit model
+
+query I
+SELECT length(do_prompt('Reply with the single word: ok')) > 0
+----
+true
+
+query I
+SELECT length(do_prompt('Reply with the single word: ok', 'qwen3.8-max')) > 0
+----
+true
+
+# do_embed: vector sizes depend on the model
+
+query II
+SELECT len(do_embed('hello')), len(do_embed('hello', 'all-mini-lm-l6-v2'))
+----
+1024	384
+
+# Semantic search: the droplet ticket is closest to a phrase that shares no key words
+query I
+SELECT id FROM tickets WHERE ticket IS NOT NULL
+ORDER BY list_cosine_similarity(do_embed(ticket), do_embed('my server will not start up')) DESC
+LIMIT 1
+----
+2
+
+# Batching: 600 rows with 300 distinct texts are all embedded
+query II
+SELECT count(*), count(v) FROM (SELECT do_embed('ticket ' || (i % 300)) AS v FROM range(600) r(i))
+----
+600	600

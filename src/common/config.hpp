@@ -9,6 +9,8 @@
 constexpr const char *kModelAccessKeySetting = "do_model_access_key";
 constexpr const char *kDecideModelSetting = "do_decide_model";
 constexpr const char *kMaxConcurrentRequestsSetting = "do_max_concurrent_requests";
+constexpr const char *kPromptModelSetting = "do_prompt_model";
+constexpr const char *kEmbedModelSetting = "do_embed_model";
 
 // Registers all SET options. Returns false if any registration fails.
 bool RegisterConfigOptions(duckdb_connection connection);

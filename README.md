@@ -19,8 +19,10 @@ table without leaving your query.
 |---|---|---|
 | [Serverless Inference](https://docs.digitalocean.com/products/inference/) | `do_models` | Available |
 | [Serverless Inference](https://docs.digitalocean.com/products/inference/) | `do_decide` | Available |
-| [Serverless Inference](https://docs.digitalocean.com/products/inference/) | `do_prompt` | Coming soon |
-| [Serverless Inference](https://docs.digitalocean.com/products/inference/) | `do_embed` | Coming soon |
+| [Serverless Inference](https://docs.digitalocean.com/products/inference/) | `do_prompt` | Available |
+| [Serverless Inference](https://docs.digitalocean.com/products/inference/) | `do_embed` | Available |
+| [Serverless Inference](https://docs.digitalocean.com/products/inference/) | `do_transcribe` (audio and video) | Coming soon |
+| [Serverless Inference](https://docs.digitalocean.com/products/inference/) | Image input for `do_prompt` and `do_embed` | Coming soon |
 
 More DigitalOcean services will be added over time.
 
@@ -142,12 +144,69 @@ FROM (
 - Rows that still fail after retries return `{"error":{"status":...,"message":...}}`.
   An invalid key or model fails the whole query.
 
+#### `do_prompt`
+
+Sends a prompt to a chat model and returns the reply as `VARCHAR`.
+
+| Form | Model |
+|---|---|
+| `do_prompt(prompt)` | The `do_prompt_model` setting |
+| `do_prompt(prompt, model)` | The given model, e.g. a `name` from `do_models()` |
+
+```sql
+SELECT id, do_prompt('Summarize this support ticket in one sentence: ' || ticket) AS summary
+FROM support_tickets;
+```
+
+**Notes**
+
+- Build the prompt with `||` or `format()`. Each row is one request.
+- The model must be a constant.
+- `NULL` prompts return `NULL` without calling the API. Identical prompts in the same chunk
+  share one request.
+- Rows that still fail after retries return `NULL`. An invalid key or model fails the whole query.
+- Replies can differ between runs, so DuckDB never reuses a result.
+
+#### `do_embed`
+
+Turns text into an embedding vector, returned as `FLOAT[]`.
+
+| Form | Model |
+|---|---|
+| `do_embed(text)` | The `do_embed_model` setting |
+| `do_embed(text, model)` | The given embedding model |
+
+Semantic search with DuckDB's list functions:
+
+```sql
+SELECT id, ticket
+FROM support_tickets
+ORDER BY list_cosine_similarity(do_embed(ticket), do_embed('my server will not start')) DESC
+LIMIT 5;
+```
+
+Store embeddings once and reuse them:
+
+```sql
+CREATE TABLE ticket_embeddings AS
+SELECT id, do_embed(ticket) AS embedding FROM support_tickets;
+```
+
+**Notes**
+
+- Texts are sent in batches, several batches at once. Identical texts share one embedding.
+- The model must be a constant. Use the same model for stored embeddings and search phrases.
+- `NULL` text returns `NULL` without calling the API. Rows that still fail after retries
+  return `NULL`. An invalid key or model fails the whole query.
+
 ## Settings
 
 | Setting | Default | Description |
 |---|---|---|
 | `do_model_access_key` | not set | Model access key. Leave unset to use `DO_MODEL_ACCESS_KEY` (recommended) |
 | `do_decide_model` | `typesafe-jev-1.13.0` | Model used by `do_decide` |
+| `do_prompt_model` | `deepseek-4-flash` | Model used by `do_prompt` |
+| `do_embed_model` | `qwen3-embedding-0.6b` | Model used by `do_embed` |
 | `do_max_concurrent_requests` | `32` | Maximum requests in flight at once, across all threads |
 
 Requests are retried on rate limiting (HTTP 429), server errors and network failures,
@@ -156,6 +215,33 @@ up to two times. Lower `do_max_concurrent_requests` if your key reaches its rate
 Prefer the environment variable over `SET do_model_access_key`. A key set with `SET` can be read
 by anyone who can run SQL in the session (for example through `duckdb_settings()`) and may be
 saved in your shell history. Setting it to `''` turns off the environment variable fallback.
+
+## Using DigitalOcean Spaces
+
+[Spaces](https://docs.digitalocean.com/products/spaces/) works through DuckDB's `httpfs`
+extension. Create a secret with your Spaces access key and the endpoint of your region:
+
+```sql
+INSTALL httpfs;
+LOAD httpfs;
+
+CREATE SECRET spaces (
+    TYPE s3,
+    KEY_ID '<spaces access key>',
+    SECRET '<spaces secret key>',
+    REGION 'nyc3',
+    ENDPOINT 'nyc3.digitaloceanspaces.com'
+);
+```
+
+Then read from and write to your Space, for example to embed files stored there:
+
+```sql
+COPY (
+    SELECT id, do_embed(ticket) AS embedding
+    FROM 's3://my-space/tickets.parquet'
+) TO 's3://my-space/ticket_embeddings.parquet';
+```
 
 ## Building
 

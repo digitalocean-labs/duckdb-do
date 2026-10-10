@@ -34,3 +34,9 @@ query I
 SELECT value IS NULL FROM duckdb_settings() WHERE name = 'do_model_access_key'
 ----
 true
+
+# Default models for do_prompt and do_embed
+query II
+SELECT current_setting('do_prompt_model'), current_setting('do_embed_model')
+----
+deepseek-4-flash	qwen3-embedding-0.6b

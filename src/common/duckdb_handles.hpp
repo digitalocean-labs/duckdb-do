@@ -2,6 +2,7 @@
 
 #include "duckdb_extension.h"
 
+#include <memory>
 #include <string>
 
 // Every DuckDB API call goes through the `duckdb_ext_api` function table.
@@ -110,4 +111,20 @@ inline std::string TakeDuckDBString(char *text) {
 	std::string result = text ? text : "";
 	duckdb_free(text);
 	return result;
+}
+
+// Hands a scalar function's bind data to DuckDB with both callbacks it needs.
+// DuckDB copies bind data when the optimizer copies an expression (for example
+// ORDER BY ... LIMIT). Without the copy callback the copy has no bind data and
+// execute reads a null pointer. A failed copy returns nullptr: execute checks it.
+template <class T>
+void SetScalarBindData(duckdb_bind_info info, std::unique_ptr<T> data) {
+	duckdb_scalar_function_set_bind_data(info, data.release(), [](void *ptr) { delete static_cast<T *>(ptr); });
+	duckdb_scalar_function_set_bind_data_copy(info, [](void *ptr) -> void * {
+		try {
+			return new T(*static_cast<const T *>(ptr));
+		} catch (...) {
+			return nullptr;
+		}
+	});
 }

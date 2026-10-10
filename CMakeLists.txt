@@ -57,6 +57,11 @@ set(EXTENSION_SOURCES
         src/ai/decide_json.cpp
         src/ai/models.cpp
         src/ai/models_json.cpp
+        src/ai/prompt.cpp
+        src/ai/prompt_json.cpp
+        src/ai/embed.cpp
+        src/ai/embed_json.cpp
+        src/common/bind_args.cpp
 )
 
 if (DUCKDB_WASM_EXTENSION)
