@@ -5,7 +5,7 @@
 [![DuckDB >= 1.5.6](https://img.shields.io/badge/DuckDB-%E2%89%A5%201.5.6-yellow)](https://duckdb.org)
 [![DuckDB C Extension API: stable](https://img.shields.io/badge/DuckDB%20C%20API-stable-brightgreen)](https://duckdb.org/docs/stable/clients/c/overview)
 <!-- Enable once the repository is public (badges of private repos return 404):
-[![CI](https://github.com/digitalocean/duckdb-do/actions/workflows/MainDistributionPipeline.yml/badge.svg)](https://github.com/digitalocean/duckdb-do/actions/workflows/MainDistributionPipeline.yml)
+[![CI](https://github.com/digitalocean-labs/duckdb-do/actions/workflows/MainDistributionPipeline.yml/badge.svg)](https://github.com/digitalocean-labs/duckdb-do/actions/workflows/MainDistributionPipeline.yml)
 -->
 
 > [!NOTE]
@@ -248,7 +248,7 @@ COPY (
 Requirements: a C++17 compiler, CMake, Python 3, Git and [vcpkg](https://vcpkg.io).
 
 ```shell
-git clone --recurse-submodules https://github.com/digitalocean/duckdb-do.git
+git clone --recurse-submodules https://github.com/digitalocean-labs/duckdb-do.git
 cd duckdb-do
 export VCPKG_ROOT=/path/to/vcpkg
 make configure
