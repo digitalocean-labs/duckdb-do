@@ -8,6 +8,7 @@
 #include <exception>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 // do_decide, the DuckDB side: registration, bind (once per query) and
@@ -218,16 +219,20 @@ void DecideBind(duckdb_bind_info info) {
 			duckdb_scalar_function_bind_set_error(info, ("do_decide: " + error).c_str());
 			return;
 		}
-		// DuckDB now owns the bind data and calls the lambda to delete it.
-		duckdb_scalar_function_set_bind_data(info, data.release(),
-		                                     [](void *ptr) { delete static_cast<DecideBindData *>(ptr); });
+		// DuckDB now owns the bind data.
+		SetScalarBindData(info, std::move(data));
 	} catch (std::exception &e) {
 		duckdb_scalar_function_bind_set_error(info, (std::string("do_decide: ") + e.what()).c_str());
 	}
 }
 
 void Execute(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output) {
-	const auto &data = *static_cast<DecideBindData *>(duckdb_scalar_function_get_bind_data(info));
+	auto *bind_data = static_cast<DecideBindData *>(duckdb_scalar_function_get_bind_data(info));
+	if (!bind_data) {
+		duckdb_scalar_function_set_error(info, "do_decide: missing bind data");
+		return;
+	}
+	const auto &data = *bind_data;
 	idx_t row_count = duckdb_data_chunk_get_size(input);
 	duckdb_vector text_vector = duckdb_data_chunk_get_vector(input, 0);
 	auto *texts = static_cast<duckdb_string_t *>(duckdb_vector_get_data(text_vector));

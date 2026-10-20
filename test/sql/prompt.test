@@ -1,0 +1,39 @@
+# name: test/sql/prompt.test
+# description: do_prompt checks that need no network calls
+# group: [docn]
+
+require docn
+
+# '' means "no key" and turns off the DO_MODEL_ACCESS_KEY fallback
+statement ok
+SET do_model_access_key = ''
+
+statement error
+SELECT do_prompt('Say hello')
+----
+no model access key
+
+statement ok
+SET do_model_access_key = 'fake-key-for-offline-tests'
+
+# NULL prompts return NULL without calling the API
+query I
+SELECT do_prompt(NULL::VARCHAR)
+----
+NULL
+
+query I
+SELECT typeof(do_prompt(NULL::VARCHAR))
+----
+VARCHAR
+
+statement error
+SELECT do_prompt('Say hello', m) FROM (VALUES ('deepseek-4-flash')) t(m)
+----
+argument 2 must be a constant, not a column
+
+# A NULL model makes the whole call NULL (DuckDB's default NULL handling)
+query I
+SELECT do_prompt('Say hello', NULL::VARCHAR)
+----
+NULL

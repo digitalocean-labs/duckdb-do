@@ -36,7 +36,11 @@ bool RegisterConfigOptions(duckdb_connection connection) {
 	       RegisterOption(connection, kDecideModelSetting, DUCKDB_TYPE_VARCHAR,
 	                      duckdb_create_varchar("typesafe-jev-1.13.0"), "Model used by do_decide") &&
 	       RegisterOption(connection, kMaxConcurrentRequestsSetting, DUCKDB_TYPE_BIGINT, duckdb_create_int64(32),
-	                      "Maximum inference requests in flight at once, shared by all threads");
+	                      "Maximum inference requests in flight at once, shared by all threads") &&
+	       RegisterOption(connection, kPromptModelSetting, DUCKDB_TYPE_VARCHAR, duckdb_create_varchar("deepseek-4-flash"),
+	                      "Model used by do_prompt") &&
+	       RegisterOption(connection, kEmbedModelSetting, DUCKDB_TYPE_VARCHAR,
+	                      duckdb_create_varchar("qwen3-embedding-0.6b"), "Model used by do_embed");
 }
 
 std::string GetModelAccessKey(duckdb_client_context context) {
