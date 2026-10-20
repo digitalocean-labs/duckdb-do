@@ -16,10 +16,10 @@ SQL functions, so you can use it on the rows of any table without leaving your q
 
 | Function | What it does | Status |
 |---|---|---|
-| [`do_models`](#do_models) | Lists the available models | Available |
-| [`do_decide`](#do_decide) | Answers yes/no, choice and score questions about text | Available |
-| [`do_prompt`](#do_prompt) | Sends a prompt to a chat model, returns the reply | Available |
-| [`do_embed`](#do_embed) | Turns text into an embedding vector | Available |
+| `do_models` | Lists the available models | Available |
+| `do_decide` | Answers yes/no, choice and score questions about text | Available |
+| `do_prompt` | Sends a prompt to a chat model, returns the reply | Available |
+| `do_embed` | Turns text into an embedding vector | Available |
 | `do_transcribe` | Turns audio and video into text | Coming soon |
 | Image input | Images for `do_prompt` and `do_embed` | Coming soon |
 
@@ -62,53 +62,10 @@ CREATE TABLE tickets AS SELECT * FROM (VALUES
 
 ## Functions
 
-### `do_models`
-
-Lists the models on Serverless Inference: `name`, `type`, `description`, `creator`,
-`context_length` and `max_output_tokens`. Use a `name` as the model of any function.
-
-### `do_decide`
-
-Answers closed questions about text with a decision model. Answers are typed and come with
-probabilities, never free text, so they are fast and cheap enough for every row.
-
-| Form | Answers |
-|---|---|
-| `do_decide(text, question)` | Yes/no, as a probability |
-| `do_decide(text, question, 'choice', labels)` | One label from a list |
-| `do_decide(text, question, 'score', levels)` | A level on an ordered scale |
-| `do_decide(text, {id: {type, instructions, criteria}, ...})` | Several questions at once |
-
-The result is `JSON`; cast it to `VARIANT` to read fields. Labels can also be structs with a
-description, e.g. `{label: 'billing', description: 'Charges and refunds'}`. Score answers
-include a `label` with the most likely level.
-
-### `do_prompt`
-
-Sends a prompt to a chat model and returns the reply as `VARCHAR`. Build the prompt with `||`
-or `format()`. Use `do_prompt(prompt, model)` to pick another model.
-
-### `do_embed`
-
-Turns text into an embedding (`FLOAT[]`), ready for DuckDB's list functions. Texts are sent
-in batches. Use `do_embed(text, model)` to pick another model.
-
-Store embeddings once and reuse them:
-
-```sql
-CREATE TABLE ticket_embeddings AS SELECT id, do_embed(ticket) AS embedding FROM tickets;
-```
-
-### Decide first, then prompt
-
-`do_decide` is cheap, so use it to pick the rows that need a chat model. DuckDB filters before
-it projects, so `do_prompt` only runs on the rows that pass:
-
-```sql
-SELECT id, do_prompt('Write a one sentence apology to the customer for: ' || ticket) AS reply
-FROM tickets
-WHERE (do_decide(ticket, 'Is the customer unhappy?')::VARIANT).noul::DOUBLE > 0.5;
-```
+- `do_models()` lists the models on Serverless Inference, with their `name` and `type`.
+- `do_decide(text, question[, 'choice' | 'score', labels])` answers yes/no, choice or score questions about text, as `JSON`.
+- `do_prompt(prompt[, model])` sends a prompt to a chat model and returns the reply as `VARCHAR`.
+- `do_embed(text[, model])` turns text into an embedding vector (`FLOAT[]`).
 
 ### Behavior
 
