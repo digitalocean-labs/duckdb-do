@@ -26,6 +26,8 @@ SQL functions, so you can use it on the rows of any table without leaving your q
 All functions run on [Serverless Inference](https://docs.digitalocean.com/products/inference/).
 More DigitalOcean services will follow.
 
+![docn demo](docs/img/demo.gif)
+
 ## Quick start
 
 `docn` is not published to an extension repository yet. [Build it](#building), then start
@@ -65,8 +67,6 @@ CREATE TABLE tickets AS SELECT * FROM (VALUES
 Lists the models on Serverless Inference: `name`, `type`, `description`, `creator`,
 `context_length` and `max_output_tokens`. Use a `name` as the model of any function.
 
-![do_models](docs/img/models.gif)
-
 ### `do_decide`
 
 Answers closed questions about text with a decision model. Answers are typed and come with
@@ -79,8 +79,6 @@ probabilities, never free text, so they are fast and cheap enough for every row.
 | `do_decide(text, question, 'score', levels)` | A level on an ordered scale |
 | `do_decide(text, {id: {type, instructions, criteria}, ...})` | Several questions at once |
 
-![do_decide](docs/img/decide.gif)
-
 The result is `JSON`; cast it to `VARIANT` to read fields. Labels can also be structs with a
 description, e.g. `{label: 'billing', description: 'Charges and refunds'}`. Score answers
 include a `label` with the most likely level.
@@ -90,14 +88,10 @@ include a `label` with the most likely level.
 Sends a prompt to a chat model and returns the reply as `VARCHAR`. Build the prompt with `||`
 or `format()`. Use `do_prompt(prompt, model)` to pick another model.
 
-![do_prompt](docs/img/prompt.gif)
-
 ### `do_embed`
 
 Turns text into an embedding (`FLOAT[]`), ready for DuckDB's list functions. Texts are sent
 in batches. Use `do_embed(text, model)` to pick another model.
-
-![do_embed](docs/img/embed.gif)
 
 Store embeddings once and reuse them:
 
@@ -110,7 +104,11 @@ CREATE TABLE ticket_embeddings AS SELECT id, do_embed(ticket) AS embedding FROM 
 `do_decide` is cheap, so use it to pick the rows that need a chat model. DuckDB filters before
 it projects, so `do_prompt` only runs on the rows that pass:
 
-![do_decide and do_prompt](docs/img/decide_prompt.gif)
+```sql
+SELECT id, do_prompt('Write a one sentence apology to the customer for: ' || ticket) AS reply
+FROM tickets
+WHERE (do_decide(ticket, 'Is the customer unhappy?')::VARIANT).noul::DOUBLE > 0.5;
+```
 
 ### Behavior
 
