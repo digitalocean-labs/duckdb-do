@@ -11,40 +11,32 @@
 > [!NOTE]
 > This extension is experimental. Functions, settings and output formats may change between releases.
 
-It brings the [DigitalOcean AI-Native Cloud](https://www.digitalocean.com/) to DuckDB.
-It exposes DigitalOcean services as SQL functions, so you can use them on the rows of any
-table without leaving your query.
+`docn` brings the [DigitalOcean AI-Native Cloud](https://www.digitalocean.com/) to DuckDB as
+SQL functions, so you can use it on the rows of any table without leaving your query.
 
-| Service | Function | Status |
+| Function | What it does | Status |
 |---|---|---|
-| [Serverless Inference](https://docs.digitalocean.com/products/inference/) | `do_models` | Available |
-| [Serverless Inference](https://docs.digitalocean.com/products/inference/) | `do_decide` | Available |
-| [Serverless Inference](https://docs.digitalocean.com/products/inference/) | `do_prompt` | Available |
-| [Serverless Inference](https://docs.digitalocean.com/products/inference/) | `do_embed` | Available |
-| [Serverless Inference](https://docs.digitalocean.com/products/inference/) | `do_transcribe` (audio and video) | Coming soon |
-| [Serverless Inference](https://docs.digitalocean.com/products/inference/) | Image input for `do_prompt` and `do_embed` | Coming soon |
+| [`do_models`](#do_models) | Lists the available models | Available |
+| [`do_decide`](#do_decide) | Answers yes/no, choice and score questions about text | Available |
+| [`do_prompt`](#do_prompt) | Sends a prompt to a chat model, returns the reply | Available |
+| [`do_embed`](#do_embed) | Turns text into an embedding vector | Available |
+| `do_transcribe` | Turns audio and video into text | Coming soon |
+| Image input | Images for `do_prompt` and `do_embed` | Coming soon |
 
-More DigitalOcean services will be added over time.
+All functions run on [Serverless Inference](https://docs.digitalocean.com/products/inference/).
+More DigitalOcean services will follow.
 
-The extension is built on the stable DuckDB C Extension API and requires DuckDB 1.5.6 or later.
+## Quick start
 
-## Installation
-
-`docn` is not yet published to an extension repository. Build it from source (see
-[Building](#building)), then install the file once. The build is not signed by DuckDB, so
-start DuckDB with unsigned extensions allowed:
-
-```shell
-duckdb -unsigned
-```
+`docn` is not published to an extension repository yet. [Build it](#building), then start
+DuckDB with `duckdb -unsigned` (the build is not signed) and install it once:
 
 ```sql
 INSTALL '/path/to/duckdb-do/build/release/docn.duckdb_extension';
 ```
 
-## Quick start
-
-Put your model access key in the `DO_MODEL_ACCESS_KEY` environment variable before starting DuckDB:
+Create a model access key in the DigitalOcean control panel under Serverless Inference, and
+put it in the environment before starting DuckDB:
 
 ```shell
 export DO_MODEL_ACCESS_KEY=<your model access key>
@@ -52,152 +44,82 @@ export DO_MODEL_ACCESS_KEY=<your model access key>
 
 ```sql
 LOAD docn;
-
--- List the available models
 FROM do_models();
 ```
 
-A model access key can be created in the DigitalOcean control panel under Serverless Inference.
+The examples below use this table:
+
+```sql
+CREATE TABLE tickets AS SELECT * FROM (VALUES
+  (1, 'I was charged twice this month and nobody replies. I will cancel.'),
+  (2, 'My droplet will not boot after the resize.'),
+  (3, 'How do I point my domain to a load balancer?'),
+  (4, 'Thanks, the fix worked. Great support!')
+) t(id, ticket);
+```
 
 ## Functions
 
-### Serverless Inference
+### `do_models`
 
-#### `do_models`
+Lists the models on Serverless Inference: `name`, `type`, `description`, `creator`,
+`context_length` and `max_output_tokens`. Use a `name` as the model of any function.
 
-Lists the models available on Serverless Inference.
+![do_models](docs/img/models.gif)
 
-```sql
-SELECT name, type, context_length FROM do_models() WHERE name LIKE 'qwen%';
-```
+### `do_decide`
 
-| Column | Type | Description |
-|---|---|---|
-| `name` | `VARCHAR` | Model name to use in requests and settings, e.g. `SET do_decide_model = '<name>'` |
-| `type` | `VARCHAR` | Model type, e.g. `chat`, `embedding` or `decisions` |
-| `description` | `VARCHAR` | Short description of the model |
-| `creator` | `VARCHAR` | Organization that created the model |
-| `context_length` | `BIGINT` | Maximum input tokens, `NULL` if not reported |
-| `max_output_tokens` | `BIGINT` | Maximum output tokens, `NULL` if not reported |
-
-#### `do_decide`
-
-Answers closed questions about text using a decision model. It returns typed answers
-with calibrated probabilities, never free text, and is suited to classification,
-routing, scoring and filtering over many rows.
+Answers closed questions about text with a decision model. Answers are typed and come with
+probabilities, never free text, so they are fast and cheap enough for every row.
 
 | Form | Answers |
 |---|---|
 | `do_decide(text, question)` | Yes/no, as a probability |
-| `do_decide(text, question, 'choice', labels)` | One label from a fixed list |
-| `do_decide(text, question, 'score', levels)` | A position on an ordered scale |
-| `do_decide(text, questions)` | Several questions in one request |
+| `do_decide(text, question, 'choice', labels)` | One label from a list |
+| `do_decide(text, question, 'score', levels)` | A level on an ordered scale |
+| `do_decide(text, {id: {type, instructions, criteria}, ...})` | Several questions at once |
 
-The result is `JSON`. Cast it to `VARIANT` to access fields.
+![do_decide](docs/img/decide.gif)
 
-**Yes/no**
+The result is `JSON`; cast it to `VARIANT` to read fields. Labels can also be structs with a
+description, e.g. `{label: 'billing', description: 'Charges and refunds'}`. Score answers
+include a `label` with the most likely level.
 
-```sql
-SELECT do_decide('I was charged twice and nobody replied.', 'Is this urgent?');
--- {"type":"noul","noul":0.78}
-```
+### `do_prompt`
 
-**Choice.** Labels are plain strings, or structs with a description to guide the model:
+Sends a prompt to a chat model and returns the reply as `VARCHAR`. Build the prompt with `||`
+or `format()`. Use `do_prompt(prompt, model)` to pick another model.
 
-```sql
-SELECT (do_decide(ticket, 'Which team should handle this?', 'choice', [
-           {label: 'billing',    description: 'Charges, invoices, refunds'},
-           {label: 'droplets',   description: 'VM creation, resize, boot, SSH'},
-           {label: 'networking', description: 'DNS, load balancers, firewalls'}
-       ])::VARIANT).choice AS team
-FROM support_tickets;
-```
+![do_prompt](docs/img/prompt.gif)
 
-**Score.** Levels are ordered from low to high. The answer includes a `label` with the most
-likely level:
+### `do_embed`
 
-```sql
-SELECT do_decide(ticket, 'How severe is this?', 'score', ['low', 'medium', 'high'])
-FROM support_tickets;
--- {"type":"score","score":2,"legend":{"0":"low","1":"medium","2":"high"},
---  "probabilities":{"0":0,"1":0,"2":1},"confidence":0.99,"label":"high"}
-```
+Turns text into an embedding (`FLOAT[]`), ready for DuckDB's list functions. Texts are sent
+in batches. Use `do_embed(text, model)` to pick another model.
 
-**Several questions.** Pass a struct of questions. The result maps each question id to its answer:
-
-```sql
-SELECT id, a.team.choice::VARCHAR AS team, a.severity.label::VARCHAR AS severity
-FROM (
-    SELECT id, do_decide(ticket, {
-        team:     {type: 'choice', instructions: 'Which team?', criteria: ['billing', 'droplets', 'networking']},
-        severity: {type: 'score',  instructions: 'How severe?', criteria: ['low', 'medium', 'high']}
-    })::VARIANT AS a
-    FROM support_tickets
-);
-```
-
-**Notes**
-
-- The question, type and labels must be constants. Only the text argument can vary per row.
-- Choice questions take 2 to 255 labels. Score questions take 2 to 10 levels.
-- `NULL` text returns `NULL` without calling the API.
-- Rows that still fail after retries return `{"error":{"status":...,"message":...}}`.
-  An invalid key or model fails the whole query.
-
-#### `do_prompt`
-
-Sends a prompt to a chat model and returns the reply as `VARCHAR`.
-
-| Form | Model |
-|---|---|
-| `do_prompt(prompt)` | The `do_prompt_model` setting |
-| `do_prompt(prompt, model)` | The given model, e.g. a `name` from `do_models()` |
-
-```sql
-SELECT id, do_prompt('Summarize this support ticket in one sentence: ' || ticket) AS summary
-FROM support_tickets;
-```
-
-**Notes**
-
-- Build the prompt with `||` or `format()`. Each row is one request.
-- The model must be a constant.
-- `NULL` prompts return `NULL` without calling the API. Identical prompts in the same chunk
-  share one request.
-- Rows that still fail after retries return `NULL`. An invalid key or model fails the whole query.
-- Replies can differ between runs, so DuckDB never reuses a result.
-
-#### `do_embed`
-
-Turns text into an embedding vector, returned as `FLOAT[]`.
-
-| Form | Model |
-|---|---|
-| `do_embed(text)` | The `do_embed_model` setting |
-| `do_embed(text, model)` | The given embedding model |
-
-Semantic search with DuckDB's list functions:
-
-```sql
-SELECT id, ticket
-FROM support_tickets
-ORDER BY list_cosine_similarity(do_embed(ticket), do_embed('my server will not start')) DESC
-LIMIT 5;
-```
+![do_embed](docs/img/embed.gif)
 
 Store embeddings once and reuse them:
 
 ```sql
-CREATE TABLE ticket_embeddings AS
-SELECT id, do_embed(ticket) AS embedding FROM support_tickets;
+CREATE TABLE ticket_embeddings AS SELECT id, do_embed(ticket) AS embedding FROM tickets;
 ```
 
-**Notes**
+### Decide first, then prompt
 
-- Texts are sent in batches, several batches at once. Identical texts share one embedding.
-- The model must be a constant. Use the same model for stored embeddings and search phrases.
-- `NULL` text returns `NULL` without calling the API. Rows that still fail after retries
-  return `NULL`. An invalid key or model fails the whole query.
+`do_decide` is cheap, so use it to pick the rows that need a chat model. DuckDB filters before
+it projects, so `do_prompt` only runs on the rows that pass:
+
+![do_decide and do_prompt](docs/img/decide_prompt.gif)
+
+### Behavior
+
+- Questions, labels and model names must be constants. Only the text can vary per row.
+- `NULL` input returns `NULL` without a request. `do_prompt` and `do_embed` send identical
+  inputs only once per chunk.
+- Requests run concurrently and are retried on rate limits, server errors and network failures.
+- Rows that still fail return `NULL` (`do_decide` returns `{"error":{...}}`). An invalid key or
+  model fails the whole query.
 
 ## Settings
 
@@ -207,19 +129,16 @@ SELECT id, do_embed(ticket) AS embedding FROM support_tickets;
 | `do_decide_model` | `typesafe-jev-1.13.0` | Model used by `do_decide` |
 | `do_prompt_model` | `deepseek-4-flash` | Model used by `do_prompt` |
 | `do_embed_model` | `qwen3-embedding-0.6b` | Model used by `do_embed` |
-| `do_max_concurrent_requests` | `32` | Maximum requests in flight at once, across all threads |
+| `do_max_concurrent_requests` | `32` | Maximum requests in flight, across all threads |
 
-Requests are retried on rate limiting (HTTP 429), server errors and network failures,
-up to two times. Lower `do_max_concurrent_requests` if your key reaches its rate limit.
-
-Prefer the environment variable over `SET do_model_access_key`. A key set with `SET` can be read
-by anyone who can run SQL in the session (for example through `duckdb_settings()`) and may be
-saved in your shell history. Setting it to `''` turns off the environment variable fallback.
+Lower `do_max_concurrent_requests` if your key hits its rate limit. Prefer the environment
+variable over `SET do_model_access_key`: a key set with `SET` is visible to anyone who can run
+SQL in the session. Setting it to `''` turns off the environment variable.
 
 ## Using DigitalOcean Spaces
 
 [Spaces](https://docs.digitalocean.com/products/spaces/) works through DuckDB's `httpfs`
-extension. Create a secret with your Spaces access key and the endpoint of your region:
+extension. Create a secret with your Spaces key and the endpoint of your region:
 
 ```sql
 INSTALL httpfs;
@@ -232,15 +151,9 @@ CREATE SECRET spaces (
     REGION 'nyc3',
     ENDPOINT 'nyc3.digitaloceanspaces.com'
 );
-```
 
-Then read from and write to your Space, for example to embed files stored there:
-
-```sql
-COPY (
-    SELECT id, do_embed(ticket) AS embedding
-    FROM 's3://my-space/tickets.parquet'
-) TO 's3://my-space/ticket_embeddings.parquet';
+COPY (SELECT id, do_embed(ticket) AS embedding FROM 's3://my-space/tickets.parquet')
+TO 's3://my-space/ticket_embeddings.parquet';
 ```
 
 ## Building
@@ -255,19 +168,14 @@ make configure
 make release
 ```
 
-The extension is written to `build/release/docn.duckdb_extension`. Use `make debug` for a
-debug build in `build/debug`.
+The extension is written to `build/release/docn.duckdb_extension` (`make debug` builds to
+`build/debug`).
 
 ## Testing
 
-Tests are written in the SQLLogicTest format and live in `test/sql`.
+Tests use the SQLLogicTest format and live in `test/sql`. Tests that call the live API run only
+when `DO_MODEL_ACCESS_KEY` is set.
 
 ```shell
 make test_debug
-```
-
-Tests that call the live API run only when a key is set:
-
-```shell
-DO_MODEL_ACCESS_KEY=<your key> make test_debug
 ```
