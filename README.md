@@ -42,9 +42,14 @@ INSTALL '/path/to/duckdb-do/build/release/docn.duckdb_extension';
 
 ## Quick start
 
+Put your model access key in the `DO_MODEL_ACCESS_KEY` environment variable before starting DuckDB:
+
+```shell
+export DO_MODEL_ACCESS_KEY=<your model access key>
+```
+
 ```sql
 LOAD docn;
-SET do_model_access_key = '<your model access key>';
 
 -- List the available models
 FROM do_models();
@@ -67,7 +72,7 @@ SELECT name, type, context_length FROM do_models() WHERE name LIKE 'qwen%';
 | Column | Type | Description |
 |---|---|---|
 | `name` | `VARCHAR` | Model name to use in requests and settings, e.g. `SET do_decide_model = '<name>'` |
-| `type` | `VARCHAR` | Model type, e.g. `chat`, `embedding` or `decision` |
+| `type` | `VARCHAR` | Model type, e.g. `chat`, `embedding` or `decisions` |
 | `description` | `VARCHAR` | Short description of the model |
 | `creator` | `VARCHAR` | Organization that created the model |
 | `context_length` | `BIGINT` | Maximum input tokens, `NULL` if not reported |
@@ -141,15 +146,16 @@ FROM (
 
 | Setting | Default | Description |
 |---|---|---|
-| `do_model_access_key` | `''` | DigitalOcean model access key |
+| `do_model_access_key` | not set | Model access key. Leave unset to use `DO_MODEL_ACCESS_KEY` (recommended) |
 | `do_decide_model` | `typesafe-jev-1.13.0` | Model used by `do_decide` |
 | `do_max_concurrent_requests` | `32` | Maximum requests in flight at once, across all threads |
 
 Requests are retried on rate limiting (HTTP 429), server errors and network failures,
 up to two times. Lower `do_max_concurrent_requests` if your key reaches its rate limit.
 
-Settings are visible through `duckdb_settings()`. Avoid sharing database sessions that
-hold a key.
+Prefer the environment variable over `SET do_model_access_key`. A key set with `SET` can be read
+by anyone who can run SQL in the session (for example through `duckdb_settings()`) and may be
+saved in your shell history. Setting it to `''` turns off the environment variable fallback.
 
 ## Building
 

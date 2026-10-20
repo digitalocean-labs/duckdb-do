@@ -40,9 +40,9 @@ void ModelsBind(duckdb_bind_info info) {
 		ClientContextHandle context(raw_context);
 
 		auto data = std::make_unique<ModelsBindData>();
-		data->access_key = GetStringSetting(context.get(), kModelAccessKeySetting);
+		data->access_key = GetModelAccessKey(context.get());
 		if (data->access_key.empty()) {
-			duckdb_bind_set_error(info, "do_models: no model access key. Run: SET do_model_access_key = '<your key>'");
+			duckdb_bind_set_error(info, "do_models: no model access key. Set the DO_MODEL_ACCESS_KEY environment variable");
 			return;
 		}
 

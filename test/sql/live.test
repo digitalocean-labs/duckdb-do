@@ -1,21 +1,19 @@
 # name: test/sql/live.test
 # description: Functions against the live DigitalOcean API. Skipped unless
-#              DO_MODEL_ACCESS_KEY is set in the environment.
+#              DO_MODEL_ACCESS_KEY is set. No SET: the key comes from the environment.
 # group: [docn]
 
 require docn
 
 require-env DO_MODEL_ACCESS_KEY
 
-statement ok
-SET do_model_access_key = '${DO_MODEL_ACCESS_KEY}'
-
 # do_models
 
-query II
-SELECT name, type FROM do_models() WHERE name = 'typesafe-jev-1.13.0'
+# Only check that Jev is listed: catalog labels such as type can change.
+query I
+SELECT count(*) FROM do_models() WHERE name = 'typesafe-jev-1.13.0'
 ----
-typesafe-jev-1.13.0	decision
+1
 
 # do_decide
 

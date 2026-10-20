@@ -4,10 +4,11 @@
 
 require docn
 
+# The key is unset (NULL) by default, so the DO_MODEL_ACCESS_KEY environment variable is used
 query III
-SELECT current_setting('do_model_access_key'), current_setting('do_decide_model'), current_setting('do_max_concurrent_requests')
+SELECT (SELECT value IS NULL FROM duckdb_settings() WHERE name = 'do_model_access_key'), current_setting('do_decide_model'), current_setting('do_max_concurrent_requests')
 ----
-(empty)	typesafe-jev-1.13.0	32
+true	typesafe-jev-1.13.0	32
 
 statement ok
 SET do_model_access_key = 'test-key'
@@ -24,3 +25,12 @@ statement error
 SET do_max_concurrent_requests = 'lots'
 ----
 Could not convert string 'lots' to INT64
+
+# RESET returns the key to unset, so the environment variable is used again
+statement ok
+RESET do_model_access_key
+
+query I
+SELECT value IS NULL FROM duckdb_settings() WHERE name = 'do_model_access_key'
+----
+true

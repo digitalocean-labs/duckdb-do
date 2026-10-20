@@ -4,6 +4,11 @@
 
 require docn
 
+# '' means "no key" and turns off the DO_MODEL_ACCESS_KEY fallback,
+# so this check holds even when the environment variable is set.
+statement ok
+SET do_model_access_key = ''
+
 statement error
 FROM do_models()
 ----

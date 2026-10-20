@@ -7,3 +7,5 @@ duckdb_unittest_tempdir
 venv
 cmake-build-*
 CLAUDE.md
+demo/
+.DS_Store
