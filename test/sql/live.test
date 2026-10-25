@@ -15,6 +15,18 @@ SELECT count(*) FROM do_models() WHERE name = 'typesafe-jev-1.13.0'
 ----
 1
 
+# The catalog is public, so do_models also works without a key
+statement ok
+SET do_model_access_key = ''
+
+query I
+SELECT count(*) > 0 FROM do_models()
+----
+true
+
+statement ok
+RESET do_model_access_key
+
 # do_decide
 
 statement ok

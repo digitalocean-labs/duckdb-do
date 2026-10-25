@@ -39,12 +39,9 @@ void ModelsBind(duckdb_bind_info info) {
 		duckdb_table_function_get_client_context(info, &raw_context);
 		ClientContextHandle context(raw_context);
 
+		// The catalog is public, so a key is optional. It is sent when set.
 		auto data = std::make_unique<ModelsBindData>();
 		data->access_key = GetModelAccessKey(context.get());
-		if (data->access_key.empty()) {
-			duckdb_bind_set_error(info, "do_models: no model access key. Set the DO_MODEL_ACCESS_KEY environment variable");
-			return;
-		}
 
 		LogicalTypeHandle varchar(duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR));
 		LogicalTypeHandle bigint(duckdb_create_logical_type(DUCKDB_TYPE_BIGINT));

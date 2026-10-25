@@ -4,18 +4,9 @@
 
 require docn
 
-# '' means "no key" and turns off the DO_MODEL_ACCESS_KEY fallback,
-# so this check holds even when the environment variable is set.
+# The catalog is public: binding needs no key ('' also turns off the environment variable)
 statement ok
 SET do_model_access_key = ''
-
-statement error
-FROM do_models()
-----
-no model access key
-
-statement ok
-SET do_model_access_key = 'fake-key-for-offline-tests'
 
 # DESCRIBE binds the function but never calls the API
 query II

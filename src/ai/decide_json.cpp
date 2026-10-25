@@ -5,8 +5,21 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <optional>
+#include <set>
 
 namespace {
+
+// Returns the first label that appears twice, or std::nullopt if all are unique.
+std::optional<std::string> FindDuplicate(const std::vector<std::string> &labels) {
+	std::set<std::string> seen;
+	for (const std::string &label : labels) {
+		if (!seen.insert(label).second) {
+			return label;
+		}
+	}
+	return std::nullopt;
+}
 
 // RAII owners for yyjson documents and strings written by yyjson.
 using DocPtr = std::unique_ptr<yyjson_doc, decltype(&yyjson_doc_free)>;
@@ -69,11 +82,23 @@ std::string ValidateQuestion(const NamedQuestion &question) {
 		if (q.choices.size() < 2 || q.choices.size() > 255) {
 			return "question '" + id + "' (choice) needs 2 to 255 labels, got " + std::to_string(q.choices.size());
 		}
+		std::vector<std::string> labels;
+		for (const auto &choice : q.choices) {
+			labels.push_back(choice.first);
+		}
+		std::optional<std::string> duplicate = FindDuplicate(labels);
+		if (duplicate) {
+			return "question '" + id + "' (choice) has the label '" + *duplicate + "' twice";
+		}
 		return "";
 	}
 	if (q.type == "score") {
 		if (q.levels.size() < 2 || q.levels.size() > 10) {
 			return "question '" + id + "' (score) needs 2 to 10 levels, got " + std::to_string(q.levels.size());
+		}
+		std::optional<std::string> duplicate = FindDuplicate(q.levels);
+		if (duplicate) {
+			return "question '" + id + "' (score) has the level '" + *duplicate + "' twice";
 		}
 		return "";
 	}
