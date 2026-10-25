@@ -1,0 +1,53 @@
+#
+# Records the weekly download count of the docn community extension. DuckDB publishes
+# only last week's number, so this keeps the history in downloads.csv on the `stats`
+# branch (kept off main so the weekly commits do not clutter its history).
+#
+name: Download Stats
+on:
+  schedule:
+    # Sundays at 08:00 UTC; DuckDB refreshes the counts around 04:00 UTC.
+    - cron: "0 8 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Switch to the stats branch (created on the first run)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch --depth 1 origin stats; then
+            git checkout -B stats FETCH_HEAD
+          else
+            git checkout --orphan stats
+            git rm -rfq .
+          fi
+
+      - name: Append last week's count
+        shell: python3 {0}
+        run: |
+          import csv, json, os, urllib.request
+          url = "https://community-extensions.duckdb.org/downloads-last-week.json"
+          # The server rejects Python's default User-Agent with 403.
+          request = urllib.request.Request(url, headers={"User-Agent": "duckdb-docn-download-stats"})
+          data = json.load(urllib.request.urlopen(request, timeout=30))
+          week, count = data.get("_last_update"), data.get("docn")
+          rows = list(csv.reader(open("downloads.csv"))) if os.path.exists("downloads.csv") else [["week_ending", "downloads"]]
+          # Not listed until the extension is published; each week is recorded once.
+          if week and count is not None and week not in (row[0] for row in rows):
+              rows.append([week, count])
+              with open("downloads.csv", "w", newline="") as f:
+                  csv.writer(f).writerows(rows)
+          print(f"week={week} downloads={count}")
+
+      - name: Commit
+        run: |
+          git add -A
+          git diff --cached --quiet || { git commit -qm "Record weekly downloads" && git push origin stats; }

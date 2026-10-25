@@ -16,6 +16,15 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 
+// Keep in sync with the version in community/description.yml.
+constexpr const char *kExtensionVersion = "0.1.0";
+
+// Function-local static: created once, thread-safely, on first use.
+std::string &UserAgent() {
+	static std::string user_agent = std::string("duckdb-docn/") + kExtensionVersion;
+	return user_agent;
+}
+
 // Process-wide cap on requests in flight, shared by every DuckDB thread.
 // C++17 has no std::counting_semaphore (that is C++20), so this is the classic
 // mutex + condition variable version of one.
@@ -124,6 +133,8 @@ void SetCommonOptions(CURL *easy, const std::string &url, curl_slist *headers, H
 	curl_easy_setopt(easy, CURLOPT_HEADERFUNCTION, StoreHeader);
 	curl_easy_setopt(easy, CURLOPT_HEADERDATA, &response.headers);
 	curl_easy_setopt(easy, CURLOPT_ERRORBUFFER, error_buffer);
+	// libcurl copies string options, so the string may change or go away afterwards.
+	curl_easy_setopt(easy, CURLOPT_USERAGENT, UserAgent().c_str());
 	curl_easy_setopt(easy, CURLOPT_CONNECTTIMEOUT_MS, 10000L);
 	curl_easy_setopt(easy, CURLOPT_TIMEOUT_MS, 60000L);
 	// Required when using libcurl from multiple threads.
@@ -179,6 +190,13 @@ struct Pending {
 };
 
 } // namespace
+
+void InitUserAgent(const std::string &duckdb_version) {
+	// Written only once, at load, before any request reads it. A second LOAD (e.g. another
+	// database in the same process) must not change it while queries may be reading it.
+	static std::once_flag once;
+	std::call_once(once, [&] { UserAgent() += " duckdb/" + duckdb_version; });
+}
 
 std::vector<HttpResponse> PostJsonConcurrent(const std::string &url, const std::string &bearer_token,
                                              const std::vector<std::string> &bodies, int64_t max_concurrent) {

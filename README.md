@@ -77,6 +77,10 @@ CREATE TABLE tickets AS SELECT * FROM (VALUES
   remaining rows of that batch are skipped, so a query (and Ctrl+C) never waits long on a dead service.
 - Rows that still fail return `NULL` (`do_decide` returns `{"error":{...}}`). An invalid key or
   model fails the whole query.
+- Works with DuckDB 1.5.6 and later, including 2.0.
+- Requests go only to DigitalOcean (`inference.do-ai.run`, and `api.digitalocean.com` for
+  `do_models`). They carry a `User-Agent` such as `duckdb-docn/0.1.0 duckdb/v2.0.0` so
+  DigitalOcean can see how the extension is used. The extension collects nothing else.
 
 ## Settings
 

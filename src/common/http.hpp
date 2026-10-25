@@ -22,6 +22,11 @@ struct HttpResponse {
 	bool timed_out = false;
 };
 
+// Sets the User-Agent sent with every request, e.g. "duckdb-docn/0.1.0 duckdb/v2.0.0",
+// so DigitalOcean can count extension usage on its side (the extension sends nothing
+// anywhere else). Called once when the extension loads; later calls are ignored.
+void InitUserAgent(const std::string &duckdb_version);
+
 // Sends one POST per entry in `bodies` to `url`, concurrently. At most
 // `max_concurrent` requests are in flight across the whole process (all DuckDB
 // threads share the limit). Failed requests are retried as RetryDelay() decides.
