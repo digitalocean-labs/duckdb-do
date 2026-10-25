@@ -62,7 +62,7 @@ CREATE TABLE tickets AS SELECT * FROM (VALUES
 
 ## Functions
 
-- `do_models()` lists the models on Serverless Inference, with their `name` and `type`.
+- `do_models()` lists the models on Serverless Inference, with their `name` and `type`. Needs no key.
 - `do_decide(text, question[, 'choice' | 'score', labels])` answers yes/no, choice or score questions about text, as `JSON`.
 - `do_prompt(prompt[, model])` sends a prompt to a chat model and returns the reply as `VARCHAR`.
 - `do_embed(text[, model])` turns text into an embedding vector (`FLOAT[]`).
@@ -73,6 +73,8 @@ CREATE TABLE tickets AS SELECT * FROM (VALUES
 - `NULL` input returns `NULL` without a request. `do_prompt` and `do_embed` send identical
   inputs only once per chunk.
 - Requests run concurrently and are retried on rate limits, server errors and network failures.
+- A request that times out (60 s) is not retried. If the service does not answer at all, the
+  remaining rows of that batch are skipped, so a query (and Ctrl+C) never waits long on a dead service.
 - Rows that still fail return `NULL` (`do_decide` returns `{"error":{...}}`). An invalid key or
   model fails the whole query.
 
@@ -89,6 +91,9 @@ CREATE TABLE tickets AS SELECT * FROM (VALUES
 Lower `do_max_concurrent_requests` if your key hits its rate limit. Prefer the environment
 variable over `SET do_model_access_key`: a key set with `SET` is visible to anyone who can run
 SQL in the session. Setting it to `''` turns off the environment variable.
+
+`SET` changes a setting for the current connection only. Use `SET GLOBAL` to change it for
+every connection, for example in a Python app that opens several cursors.
 
 ## Using DigitalOcean Spaces
 
