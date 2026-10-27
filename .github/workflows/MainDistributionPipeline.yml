@@ -35,3 +35,5 @@ jobs:
       extra_toolchains: python3
       vcpkg_commit: 84bab45d415d22042bd0b9081aea57f362da3f35
       exclude_archs: "wasm_mvp;wasm_eh;wasm_threads;windows_amd64_mingw"
+      # Build every platform the community repository builds (free for public repositories).
+      reduced_ci_mode: disabled

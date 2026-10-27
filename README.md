@@ -4,9 +4,7 @@
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)](#)
 [![DuckDB >= 1.5.6](https://img.shields.io/badge/DuckDB-%E2%89%A5%201.5.6-yellow)](https://duckdb.org)
 [![DuckDB C Extension API: stable](https://img.shields.io/badge/DuckDB%20C%20API-stable-brightgreen)](https://duckdb.org/docs/stable/clients/c/overview)
-<!-- Enable once the repository is public (badges of private repos return 404):
 [![CI](https://github.com/digitalocean-labs/duckdb-do/actions/workflows/MainDistributionPipeline.yml/badge.svg)](https://github.com/digitalocean-labs/duckdb-do/actions/workflows/MainDistributionPipeline.yml)
--->
 
 > [!NOTE]
 > This extension is experimental. Functions, settings and output formats may change between releases.
