@@ -30,13 +30,6 @@ More DigitalOcean services will follow.
 
 ## Quick start
 
-`docn` is not published to an extension repository yet. [Build it](#building), then start
-DuckDB with `duckdb -unsigned` (the build is not signed) and install it once:
-
-```sql
-INSTALL '/path/to/duckdb-do/build/release/docn.duckdb_extension';
-```
-
 Create a model access key in the DigitalOcean control panel under Serverless Inference, and
 put it in the environment before starting DuckDB:
 
@@ -44,7 +37,10 @@ put it in the environment before starting DuckDB:
 export DO_MODEL_ACCESS_KEY=<your model access key>
 ```
 
+Install `docn` once from the DuckDB community extensions repository, then load it:
+
 ```sql
+INSTALL docn FROM community;
 LOAD docn;
 FROM do_models();
 ```
@@ -134,6 +130,13 @@ make release
 
 The extension is written to `build/release/docn.duckdb_extension` (`make debug` builds to
 `build/debug`).
+
+A local build is not signed. Start DuckDB with `duckdb -unsigned` and install it once:
+
+```sql
+INSTALL '/path/to/duckdb-do/build/release/docn.duckdb_extension';
+LOAD docn;
+```
 
 ## Testing
 
