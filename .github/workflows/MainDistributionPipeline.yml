@@ -35,3 +35,8 @@ jobs:
       extra_toolchains: python3
       vcpkg_commit: 84bab45d415d22042bd0b9081aea57f362da3f35
       exclude_archs: "wasm_mvp;wasm_eh;wasm_threads;windows_amd64_mingw"
+      # Also build the platforms DuckDB 2.0 only builds on request (Intel macOS, musl Linux,
+      # Windows arm64). Keep in sync with opt_in_platforms in community/description.yml.
+      opt_in_archs: "osx_amd64;linux_amd64_musl;linux_arm64_musl;windows_arm64"
+      # Run every platform to the end instead of stopping at the first failure.
+      reduced_ci_mode: disabled
