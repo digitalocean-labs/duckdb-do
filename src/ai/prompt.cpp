@@ -6,6 +6,7 @@
 #include "common/duckdb_handles.hpp"
 #include "common/http.hpp"
 
+#include <chrono>
 #include <exception>
 #include <memory>
 #include <optional>
@@ -25,6 +26,8 @@
 namespace {
 
 constexpr const char *kChatUrl = "https://inference.do-ai.run/v1/chat/completions";
+// Chat models write long answers to open questions: 41 to 72 s measured for ordinary prompts.
+constexpr std::chrono::seconds kChatTimeout(120);
 
 void PromptBind(duckdb_bind_info info) {
 	try {
@@ -78,7 +81,8 @@ void Execute(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector o
 		bodies.push_back(std::move(body));
 	}
 
-	std::vector<HttpResponse> responses = PostJsonConcurrent(kChatUrl, data.access_key, bodies, data.max_concurrent);
+	std::vector<HttpResponse> responses =
+	    PostJsonConcurrent(kChatUrl, data.access_key, bodies, data.max_concurrent, kChatTimeout);
 	std::vector<std::optional<std::string>> replies(responses.size());
 	for (size_t i = 0; i < responses.size(); i++) {
 		const HttpResponse &response = responses[i];

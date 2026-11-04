@@ -9,7 +9,7 @@
 // - 400, 401, 403, 422 mean the request itself is wrong; retrying will not help.
 // - status 0 means no response at all (timeout, DNS, TLS); see response.error.
 std::optional<std::chrono::milliseconds> RetryDelay(const HttpResponse &response, int attempt) {
-	// A timeout already waited up to 60 s. DuckDB cannot cancel a running chunk, so
+	// A timeout already waited up to a minute or more. DuckDB cannot cancel a running chunk, so
 	// retrying would keep Ctrl+C waiting even longer for a service that is not answering.
 	if (response.timed_out) {
 		return std::nullopt;

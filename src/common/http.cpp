@@ -17,7 +17,7 @@ namespace {
 using Clock = std::chrono::steady_clock;
 
 // Keep in sync with the version in community/description.yml.
-constexpr const char *kExtensionVersion = "0.1.0";
+constexpr const char *kExtensionVersion = "0.1.1";
 
 // Function-local static: created once, thread-safely, on first use.
 std::string &UserAgent() {
@@ -124,7 +124,7 @@ HeaderList MakeHeaders(const std::string &bearer_token) {
 // Options shared by every request: URL, headers, response capture, timeouts, TLS.
 // libcurl keeps pointers to `response` and `error_buffer` until the request ends.
 void SetCommonOptions(CURL *easy, const std::string &url, curl_slist *headers, HttpResponse &response,
-                      char *error_buffer) {
+                      char *error_buffer, std::chrono::seconds timeout) {
 	static const char *ca_bundle = SystemCaBundle();
 	curl_easy_setopt(easy, CURLOPT_URL, url.c_str());
 	curl_easy_setopt(easy, CURLOPT_HTTPHEADER, headers);
@@ -136,7 +136,7 @@ void SetCommonOptions(CURL *easy, const std::string &url, curl_slist *headers, H
 	// libcurl copies string options, so the string may change or go away afterwards.
 	curl_easy_setopt(easy, CURLOPT_USERAGENT, UserAgent().c_str());
 	curl_easy_setopt(easy, CURLOPT_CONNECTTIMEOUT_MS, 10000L);
-	curl_easy_setopt(easy, CURLOPT_TIMEOUT_MS, 60000L);
+	curl_easy_setopt(easy, CURLOPT_TIMEOUT_MS, static_cast<long>(timeout.count() * 1000));
 	// Required when using libcurl from multiple threads.
 	curl_easy_setopt(easy, CURLOPT_NOSIGNAL, 1L);
 	if (ca_bundle) {
@@ -199,7 +199,8 @@ void InitUserAgent(const std::string &duckdb_version) {
 }
 
 std::vector<HttpResponse> PostJsonConcurrent(const std::string &url, const std::string &bearer_token,
-                                             const std::vector<std::string> &bodies, int64_t max_concurrent) {
+                                             const std::vector<std::string> &bodies, int64_t max_concurrent,
+                                             std::chrono::seconds timeout) {
 	EnsureCurlGlobalInit();
 	const int64_t limit = std::max<int64_t>(max_concurrent, 1);
 	InFlightLimiter &limiter = GlobalLimiter();
@@ -230,7 +231,7 @@ std::vector<HttpResponse> PostJsonConcurrent(const std::string &url, const std::
 		if (!transfer->easy) {
 			throw std::runtime_error("could not create an HTTP handle");
 		}
-		SetCommonOptions(transfer->easy, url, headers.get(), transfer->response, transfer->error_buffer);
+		SetCommonOptions(transfer->easy, url, headers.get(), transfer->response, transfer->error_buffer, timeout);
 		// Not copied by libcurl: `bodies` outlives every transfer.
 		curl_easy_setopt(transfer->easy, CURLOPT_POSTFIELDS, body.data());
 		curl_easy_setopt(transfer->easy, CURLOPT_POSTFIELDSIZE_LARGE, static_cast<curl_off_t>(body.size()));
@@ -332,7 +333,7 @@ HttpResponse GetJson(const std::string &url, const std::string &bearer_token) {
 			response.error = "could not create an HTTP handle";
 			return response;
 		}
-		SetCommonOptions(easy.get(), url, headers.get(), response, error_buffer);
+		SetCommonOptions(easy.get(), url, headers.get(), response, error_buffer, kDefaultTimeout);
 
 		CURLcode result = curl_easy_perform(easy.get());
 		RecordResult(easy.get(), result, error_buffer, response);

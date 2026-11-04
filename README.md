@@ -67,13 +67,14 @@ CREATE TABLE tickets AS SELECT * FROM (VALUES
 - `NULL` input returns `NULL` without a request. `do_prompt` and `do_embed` send identical
   inputs only once per chunk.
 - Requests run concurrently and are retried on rate limits, server errors and network failures.
-- A request that times out (60 s) is not retried. If the service does not answer at all, the
-  remaining rows of that batch are skipped, so a query (and Ctrl+C) never waits long on a dead service.
+- A request that times out (60 s, or 120 s for `do_prompt`) is not retried. If the service does
+  not answer at all, the remaining rows of that batch are skipped, so a query (and Ctrl+C) never
+  waits long on a dead service.
 - Rows that still fail return `NULL` (`do_decide` returns `{"error":{...}}`). An invalid key or
   model fails the whole query.
 - Works with DuckDB 1.5.6 and later, including 2.0.
 - Requests go only to DigitalOcean (`inference.do-ai.run`, and `api.digitalocean.com` for
-  `do_models`). They carry a `User-Agent` such as `duckdb-docn/0.1.0 duckdb/v2.0.0` so
+  `do_models`). They carry a `User-Agent` such as `duckdb-docn/0.1.1 duckdb/v2.0.0` so
   DigitalOcean can see how the extension is used. The extension collects nothing else.
 
 ## Settings
